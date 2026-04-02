@@ -1,10 +1,17 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import DataSummary from "@/components/DataSummary";
 import PostCard from "@/components/PostCard";
 import GenerateButton from "@/components/GenerateButton";
 import type { BigQueryData, PostTone, GeneratedPost } from "@/lib/types";
+
+interface UsageSummary {
+  month: string;
+  cost: number;
+  limit: number;
+  requests: number;
+}
 
 export default function Home() {
   const [data, setData] = useState<BigQueryData | null>(null);
@@ -13,6 +20,18 @@ export default function Home() {
   const [fetchingData, setFetchingData] = useState(false);
   const [generatingPosts, setGeneratingPosts] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [usage, setUsage] = useState<UsageSummary | null>(null);
+
+  const fetchUsage = useCallback(async () => {
+    try {
+      const res = await fetch("/api/usage");
+      if (res.ok) setUsage(await res.json());
+    } catch {}
+  }, []);
+
+  useEffect(() => {
+    fetchUsage();
+  }, [fetchUsage]);
 
   const handleFetchData = async () => {
     setFetchingData(true);
@@ -48,6 +67,7 @@ export default function Home() {
       }
       const result = await res.json();
       setPosts(result.posts);
+      fetchUsage();
     } catch (e) {
       setError(e instanceof Error ? e.message : "エラーが発生しました");
     } finally {
@@ -55,16 +75,42 @@ export default function Home() {
     }
   };
 
+  const usagePercent = usage ? Math.min(100, (usage.cost / usage.limit) * 100) : 0;
+
   return (
     <div className="min-h-screen bg-gray-50">
       <header className="bg-white border-b border-gray-200">
-        <div className="max-w-5xl mx-auto px-4 py-4 sm:px-6">
-          <h1 className="text-xl font-bold text-gray-900">
-            SNS 自動投稿ジェネレーター
-          </h1>
-          <p className="text-sm text-gray-500 mt-1">
-            BigQuery のデータから X の投稿案を AI で自動生成
-          </p>
+        <div className="max-w-5xl mx-auto px-4 py-4 sm:px-6 flex items-center justify-between">
+          <div>
+            <h1 className="text-xl font-bold text-gray-900">
+              SNS 自動投稿ジェネレーター
+            </h1>
+            <p className="text-sm text-gray-500 mt-1">
+              BigQuery のデータから X の投稿案を AI で自動生成
+            </p>
+          </div>
+          {usage && (
+            <div className="text-right">
+              <p className="text-xs text-gray-500">
+                今月の使用額 ({usage.month})
+              </p>
+              <p className="text-sm font-semibold text-gray-800">
+                ${usage.cost.toFixed(2)}{" "}
+                <span className="text-gray-400 font-normal">/ ${usage.limit.toFixed(2)}</span>
+              </p>
+              <div className="w-32 h-1.5 bg-gray-200 rounded-full mt-1">
+                <div
+                  className={`h-1.5 rounded-full transition-all ${
+                    usagePercent >= 90 ? "bg-red-500" : usagePercent >= 70 ? "bg-yellow-500" : "bg-green-500"
+                  }`}
+                  style={{ width: `${usagePercent}%` }}
+                />
+              </div>
+              <p className="text-xs text-gray-400 mt-0.5">
+                {usage.requests}回生成済み
+              </p>
+            </div>
+          )}
         </div>
       </header>
 

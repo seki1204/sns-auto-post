@@ -3,6 +3,7 @@
 # credentials
 credentials.json
 *.json.key
+.usage.json
 
 # dependencies
 /node_modules

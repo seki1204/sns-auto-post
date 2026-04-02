@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import type { BigQueryData, PostTone, GeneratedPost } from "./types";
+import { checkBudget, recordUsage } from "./usage-tracker";
 
 function getClient(): Anthropic {
   const apiKey = process.env.ANTHROPIC_API_KEY;
@@ -75,6 +76,14 @@ export async function generatePosts(
   tone: PostTone,
   count: number = 5
 ): Promise<GeneratedPost[]> {
+  // 月額コスト上限チェック
+  const budget = checkBudget();
+  if (!budget.allowed) {
+    throw new Error(
+      `月額コスト上限 ($${budget.limit}) に達しました。今月の使用額: $${budget.used}。来月にリセットされます。`
+    );
+  }
+
   const client = getClient();
   const prompt = buildPrompt(data, tone, count);
 
@@ -83,6 +92,12 @@ export async function generatePosts(
     max_tokens: 1024,
     messages: [{ role: "user", content: prompt }],
   });
+
+  // トークン使用量を記録
+  recordUsage(
+    response.usage.input_tokens,
+    response.usage.output_tokens
+  );
 
   const text =
     response.content[0].type === "text" ? response.content[0].text : "";
